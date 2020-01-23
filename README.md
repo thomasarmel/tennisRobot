@@ -1,5 +1,5 @@
 # tennisRobot
-A robot which fetch tennis balls, computed with C++ in a Raspberry Pi
+A robot which fetches tennis balls, computed with C++ in a Raspberry Pi
 
 
 g++ -o progRobot main.cpp detecttennis.cpp dcmotor.cpp US-I2C_servo.cpp -lopencv_core -lopencv_highgui -lopencv_imgproc -lwiringPi
