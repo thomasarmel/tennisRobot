@@ -1,28 +1,12 @@
-#include <iostream>
-#include <pthread.h>
-#include <wiringPi.h>
+#include "dcmotor.h"
 
 using namespace std;
 
-void marche_avant(unsigned int delai, int nbPas, unsigned short pin[]);
-void marche_arriere(unsigned int delai, int nbPas, unsigned short pin[]);
-void prochainStep(unsigned short numero, unsigned short pin[]);
-void reglage_pins(unsigned short p1, unsigned short p2, unsigned short p3, unsigned short p4, unsigned short pin[]);
-void *fThreadRoue1(void *arg);
-void *fThreadRoue2(void *arg);
-
-namespace
+DcMotor::DcMotor()
 {
-    unsigned short pin1[]={7, 0, 1, 2}, pin2[]={3, 4, 5, 6}, unable=21;
-    unsigned int delaiPrompt;
-    int nbPasPrompt;
-}
-
-int main()
-{
-    pthread_t threadRoue1, threadRoue2;
-    wiringPiSetup();
-    pinMode(pin1[0], OUTPUT);
+    unable=21;
+    wiringPiSetup(); // On initialise la bibliotheque WiringPi
+    pinMode(pin1[0], OUTPUT); // On regle les pins en mode sortie
     pinMode(pin1[1], OUTPUT);
     pinMode(pin1[2], OUTPUT);
     pinMode(pin1[3], OUTPUT);
@@ -31,78 +15,75 @@ int main()
     pinMode(pin2[2], OUTPUT);
     pinMode(pin2[3], OUTPUT);
     pinMode(unable, OUTPUT);
-    digitalWrite(unable, 1);
-    cout << "Le délai entre chaque pas permet de contrôler la vitesse du moteur." << endl;
-    cout << "Entrez une valeur d'au moins 5 millisecondes (rotation très rapide)." << endl;
-    cout << "Délai désiré: ";
-    cin >> delaiPrompt;
-    cout << "Choisissez le nombre de pas accomplis par le moteur." << endl;
-    cout << "(Une valeur négative fera tourner le moteur en sens inverse.)" << endl;
-    cout << "Nombre de pas désiré: ";
-    cin >> nbPasPrompt;
-
-    if(pthread_create(&threadRoue1, NULL, fThreadRoue1, NULL))
-    {
-	    cout << "Erreur lors de la creation du thread (roue 1)" << endl;
-	    return EXIT_FAILURE;
-    }
-    if(pthread_create(&threadRoue2, NULL, fThreadRoue2, NULL))
-    {
-	    cout << "Erreur lors de la creation du thread (roue 2)" << endl;
-	    return EXIT_FAILURE;
-    }
-
-    if(pthread_join(threadRoue1, NULL))
-    {
-	    cout << "Erreur pthread_join (roue 1)" << endl;
-	    return EXIT_FAILURE;
-    }
-    if(pthread_join(threadRoue2, NULL))
-    {
-	    cout << "Erreur pthread_join (roue 2)" << endl;
-	    return EXIT_FAILURE;
-    }
-
-    digitalWrite(unable, 0);
-    return 0;
 }
 
-void marche_avant(unsigned int delai, int nbPas, unsigned short pin[])
+DcMotor::~DcMotor()
 {
-    for(unsigned int i=0; i<nbPas; i++)
-    {
-        prochainStep(i % 4, pin);
-        delay(delai);
-    }
 }
 
-void marche_arriere(unsigned int delai, int nbPas, unsigned short pin[])
+void DcMotor::marche(short dist)
 {
-    for(unsigned int i=0; i<nbPas; i++)
+    // 1 tour = 200 pas = 18,85 cm
+    // delai 5 ms -> 18,85 cm/s
+    // 1 pas=0.0943 cm
+    int nbPas;
+    unsigned int delai=20; // Delai entre chaque pas : 20 ms (change la vitesse)
+    digitalWrite(unable, 1); // On alimente les moteurs
+    if(dist >= 0) // On avance
     {
-        prochainStep(3 - (i % 4), pin);
-        delay(delai);
+        nbPas=dist/0.0943;
+        for(unsigned int i=0; i<nbPas; i++)
+        {
+            prochainStep(3 - (i % 4), pin1); // les moteurs 1 et 2 sont symetriques, donc inverses
+            prochainStep(i % 4, pin2);
+            delay(delai);
+        }
     }
+    else // On recule
+    {
+        nbPas=(-dist)/0.0943;
+        for(unsigned int i=0; i<nbPas; i++)
+        {
+            prochainStep(i % 4, pin1); // les moteurs 1 et 2 sont symetriques, donc inverses
+            prochainStep(3 - (i % 4), pin2);
+            delay(delai);
+        }
+    }
+    digitalWrite(unable, 0); // On enleve l’alimentation des moteurs
 }
 
-void prochainStep(unsigned short numero, unsigned short pin[])
+void DcMotor::pivot(short deg)
 {
-    /*switch(numero)  // Couple maximal
+    // dist 360°: 17 cm * pi = 53,407075111 cm
+    int nbPas;
+    unsigned int delai=20;
+    digitalWrite(unable, 1); // On alimente les moteurs
+    if(deg >= 0)
     {
-    case 0:
-        reglage_pins(1, 0, 1, 0, pin);
-        break;
-    case 1:
-        reglage_pins(0, 1, 1, 0, pin);
-        break;
-    case 2:
-        reglage_pins(0, 1, 0, 1, pin);
-        break;
-    case 3:
-        reglage_pins(1, 0, 0, 1, pin);
-        break;
-    }*/
-switch(numero)  // pas complets
+        nbPas=deg*1.5732;
+        for(unsigned int i=0; i<nbPas; i++)
+        {
+            prochainStep(i % 4, pin1);
+            prochainStep(i % 4, pin2);
+            delay(delai);
+        }
+    }
+    else
+    {
+        nbPas=(-deg)*1.5732;
+        for(unsigned int i=0; i<nbPas; i++)
+        {
+            prochainStep(3 - (i % 4), pin1);
+            prochainStep(3 - (i % 4), pin2);
+            delay(delai);
+        }
+    }
+    digitalWrite(unable, 0); // On enleve l’alimentation des moteurs
+}
+
+void DcMotor::prochainStep(unsigned short numero, unsigned short pin[])
+{
+switch(numero)  // fonctionnement « pas complets »
     {
     case 0:
         reglage_pins(1, 0, 0, 0, pin);
@@ -119,44 +100,10 @@ switch(numero)  // pas complets
     }
 }
 
-void reglage_pins(unsigned short p1, unsigned short p2, unsigned short p3, unsigned short p4, unsigned short pin[])
+void DcMotor::reglage_pins(unsigned short p1, unsigned short p2, unsigned short p3, unsigned short p4, unsigned short pin[])
 {
     digitalWrite(pin[0], p1);
     digitalWrite(pin[1], p2);
     digitalWrite(pin[2], p3);
     digitalWrite(pin[3], p4);
 }
-
-void *fThreadRoue1(void *arg)
-{
-    if (nbPasPrompt < 0)
-    {
-        marche_arriere(delaiPrompt, -nbPasPrompt, pin1);
-    }
-    else
-    {
-        marche_avant(delaiPrompt, nbPasPrompt, pin1);
-    }
-    (void)arg;
-    pthread_exit(NULL);
-}
-
-void *fThreadRoue2(void *arg) // Attention: tourne à l'envers du fait des engrenages
-{
-    if (nbPasPrompt < 0)
-    {
-        marche_avant(delaiPrompt, -nbPasPrompt, pin2);
-    }
-    else
-    {
-        marche_arriere(delaiPrompt, nbPasPrompt, pin2);
-    }
-    (void)arg;
-    pthread_exit(NULL);
-}
-
-
-/**
-HIGH=1
-LOW=0
-*/
